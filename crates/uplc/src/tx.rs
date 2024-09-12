@@ -86,6 +86,89 @@ pub fn eval_phase_two(
     }
 }
 
+#[derive(thiserror::Error, Debug, Display, miette::Diagnostic)]
+pub enum EvalError {
+    FailedToDecodeTxBytes(Error),
+    FailedToDecodeCostModels(Error),
+    FailedToDecodeInputReferences(Error),
+    FailedToDecodeOutputs(Error),
+    FailedPhaseTwoEval(Error),
+}
+
+/// This function is the same as [`eval_phase_two`]
+/// but the inputs are raw bytes.
+/// initial_budget expects (cpu, mem).
+/// slot_config (zero_time, zero_slot, slot_length)
+pub fn eval_phase_two_raw_bis(
+    tx_bytes: &[u8],
+    utxos_bytes: &[(Vec<u8>, Vec<u8>)],
+    cost_mdls_bytes: Option<&[u8]>,
+    initial_budget: (u64, u64),
+    slot_config: (u64, u64, u32),
+    run_phase_one: bool,
+    with_redeemer: fn(&Redeemer) -> (),
+) -> Result<Vec<Vec<u8>>, EvalError> {
+    eprintln!("yes");
+    let multi_era_tx = MultiEraTx::decode_for_era(Era::Conway, tx_bytes)
+        .or_else(|_| MultiEraTx::decode_for_era(Era::Babbage, tx_bytes))
+        .or_else(|_| MultiEraTx::decode_for_era(Era::Alonzo, tx_bytes))
+        .map_err(|err| EvalError::FailedToDecodeTxBytes(err.into()))?;
+    eprintln!("no");
+
+    let cost_mdls = cost_mdls_bytes
+        .map(CostMdls::decode_fragment)
+        .transpose()
+        .map_err(|err| EvalError::FailedToDecodeCostModels(err.into()))?;
+
+    let budget = ExBudget {
+        cpu: initial_budget.0 as i64,
+        mem: initial_budget.1 as i64,
+    };
+
+    let mut utxos = Vec::new();
+
+    for (input, output) in utxos_bytes {
+        utxos.push(ResolvedInput {
+            input: TransactionInput::decode_fragment(input)
+                .map_err(|err| EvalError::FailedToDecodeInputReferences(err.into()))?,
+            output: TransactionOutput::decode_fragment(output)
+                .map_err(|err| EvalError::FailedToDecodeOutputs(err.into()))?,
+        });
+    }
+
+    let sc = SlotConfig {
+        zero_time: slot_config.0,
+        zero_slot: slot_config.1,
+        slot_length: slot_config.2,
+    };
+
+    match multi_era_tx {
+        MultiEraTx::Conway(tx) => {
+            match eval_phase_two(
+                &tx,
+                &utxos,
+                cost_mdls.as_ref(),
+                Some(&budget),
+                &sc,
+                run_phase_one,
+                with_redeemer,
+            ) {
+                Ok(redeemers) => Ok(redeemers
+                    .iter()
+                    .map(|r| r.encode_fragment().unwrap())
+                    .collect()),
+                Err(err) => Err(EvalError::FailedPhaseTwoEval(err.into())),
+            }
+        }
+        _ => unimplemented!(
+            r#"The transaction is serialized in an old era format. Because we're slightly lazy to
+maintain backward compatibility with every possible transaction format AND, because
+those formats are mostly forward-compatible, you are kindly expected to provide a
+transaction in a format suitable for the Conway era."#
+        ),
+    }
+}
+
 /// This function is the same as [`eval_phase_two`]
 /// but the inputs are raw bytes.
 /// initial_budget expects (cpu, mem).
