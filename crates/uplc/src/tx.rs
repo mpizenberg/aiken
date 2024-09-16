@@ -86,12 +86,17 @@ pub fn eval_phase_two(
     }
 }
 
-#[derive(thiserror::Error, Debug, Display, miette::Diagnostic)]
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
 pub enum EvalError {
-    FailedToDecodeTxBytes(Error),
+    #[error("Failed to decode tx_bytes: {0}")]
+    FailedToDecodeTxBytes(String),
+    #[error("Failed to decode cost models")]
     FailedToDecodeCostModels(Error),
+    #[error("Failed to decode input references")]
     FailedToDecodeInputReferences(Error),
+    #[error("Failed to decode input outputs")]
     FailedToDecodeOutputs(Error),
+    #[error("Failed to evaluate the Tx: {0}")]
     FailedPhaseTwoEval(Error),
 }
 
@@ -112,7 +117,7 @@ pub fn eval_phase_two_raw_bis(
     let multi_era_tx = MultiEraTx::decode_for_era(Era::Conway, tx_bytes)
         .or_else(|_| MultiEraTx::decode_for_era(Era::Babbage, tx_bytes))
         .or_else(|_| MultiEraTx::decode_for_era(Era::Alonzo, tx_bytes))
-        .map_err(|err| EvalError::FailedToDecodeTxBytes(err.into()))?;
+        .map_err(|_| EvalError::FailedToDecodeTxBytes(format!("{:?}", tx_bytes)))?;
     eprintln!("no");
 
     let cost_mdls = cost_mdls_bytes
