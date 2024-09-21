@@ -100,6 +100,12 @@ pub enum EvalError {
     FailedPhaseTwoEval(Error),
 }
 
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter()
+         .map(|b| format!("{:02x}", b))
+         .collect()
+}
+
 /// This function is the same as [`eval_phase_two`]
 /// but the inputs are raw bytes.
 /// initial_budget expects (cpu, mem).
@@ -117,7 +123,7 @@ pub fn eval_phase_two_raw_bis(
     let multi_era_tx = MultiEraTx::decode_for_era(Era::Conway, tx_bytes)
         .or_else(|_| MultiEraTx::decode_for_era(Era::Babbage, tx_bytes))
         .or_else(|_| MultiEraTx::decode_for_era(Era::Alonzo, tx_bytes))
-        .map_err(|_| EvalError::FailedToDecodeTxBytes(format!("{:?}", tx_bytes)))?;
+        .map_err(|err| EvalError::FailedToDecodeTxBytes(format!("{:?}   {}",err, bytes_to_hex(tx_bytes))))?;
     eprintln!("no");
 
     let cost_mdls = cost_mdls_bytes
