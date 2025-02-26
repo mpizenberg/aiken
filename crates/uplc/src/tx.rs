@@ -116,18 +116,16 @@ pub fn eval_phase_two_raw_bis(
     slot_config: (u64, u64, u32),
     run_phase_one: bool,
     with_redeemer: fn(&Redeemer) -> (),
-) -> Result<Vec<Vec<u8>>, EvalError> {
-    eprintln!("yes");
+) -> Result<Vec<(Vec<u8>, EvalResult)>, EvalError> {
     let multi_era_tx = MultiEraTx::decode_for_era(Era::Conway, tx_bytes)
         // .or_else(|_| MultiEraTx::decode_for_era(Era::Babbage, tx_bytes))
         // .or_else(|_| MultiEraTx::decode_for_era(Era::Alonzo, tx_bytes))
         .map_err(|err| {
             EvalError::FailedToDecodeTxBytes(format!("{:?}   {}", err, bytes_to_hex(tx_bytes)))
         })?;
-    eprintln!("no");
 
     let cost_mdls = cost_mdls_bytes
-        .map(CostMdls::decode_fragment)
+        .map(CostModels::decode_fragment)
         .transpose()
         .map_err(|err| EvalError::FailedToDecodeCostModels(err.into()))?;
 
@@ -165,8 +163,8 @@ pub fn eval_phase_two_raw_bis(
                 with_redeemer,
             ) {
                 Ok(redeemers) => Ok(redeemers
-                    .iter()
-                    .map(|r| r.encode_fragment().unwrap())
+                    .into_iter()
+                    .map(|(r, e)| (r.encode_fragment().unwrap(), e))
                     .collect()),
                 Err(err) => Err(EvalError::FailedPhaseTwoEval(err.into())),
             }
