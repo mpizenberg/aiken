@@ -227,7 +227,7 @@ fn test_eval_elm() {
         20000000000,
     ];
 
-    let cost_mdl = CostMdls {
+    let cost_mdl = CostModels {
         plutus_v1: None,
         plutus_v2: Some(costs),
         plutus_v3: None,
